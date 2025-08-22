@@ -130,3 +130,9 @@ def get_parcelles():
                 j'avance bien donc je continue mais j'irais faire de la doc pour mieux comprendre tout ca et les impact de ces choix 
   vendredi ( 16h19) petite pause et je commit deja ce fichier 
 
+j'ai repris le dev , j'en suis arrivé a affiché des polygone rouge pour les parcelle sur la carte et 
+lors d'un clic d'affiché un numero siren (encore fictif) mais l'option est déja là 
+
+concernant l'api pour avoir les fichiers majic aprés recherche j'ai l'impression qu'il faille avoir un token chez sogefi pour avoir accès a cette api , 
+
+vendredi (18h) je vais m'arreter la pour ajd et tenter de commit ce que j'ai sous la main 
