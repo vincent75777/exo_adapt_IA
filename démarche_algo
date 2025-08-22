@@ -1,0 +1,132 @@
+Démarche : je vais essayer d'expliquer un maximum le projet et les phases que je vais faire tout au long du développement a travers ce fichier 
+
+
+  1 étape : Téléchargement des données parcellaire 
+    dl les données de l'Aisne, sur le lien suivant en cherchant sur data.gouv je pense avoir le fichier que je souhaite 
+    : https://geoservices.ign.fr/parcellaire-express-pci#telechargementfra,  j'ai pris celui de l'aisne(02) 
+    plusieurs fichiers dispo plusieurs format dont GEOJson qui je pense est ceux qu'on souhaite 
+
+      etape 1 me semble ok 
+
+
+  2 etapes : Mise en place de la base de données
+
+    base en POSTGIS , j'ai deja sur ma machine postgreSQL , du coup en bash je créer la base ( je créer aussi un répertoire en bash pour le projet)
+      j'appelle ma base : avec la commande createdb et je la nomme "AisneDBv1", 
+      1 er prblm , jsp si le fait d'etre dans un autre répertoire empeche postgresql de fonctionner , je l'ai re dl et j'avais oublier de start le services , 
+        j'ai un peu utiliser chatgpt pour debloquer la situation, j'installe aussi postGIS je vais lister les commande bash utiliser au cas ou 
+
+        brew install postgresql
+        brew services start postgresql
+        brew install postgis
+        createdb AisneDBv1
+
+        la base est créer , j'active postGIS sur la base , soucis avec la version de POSTgreSQL 14 et post GIT , je chatgpt pour solutionner ca 
+          okey ca me semble good mtn 
+          copie de mon bash " 
+vincentreyss@MacBook-Air-de-Vincent exo_adaptIa % psql AisneDBv1
+psql (14.19 (Homebrew))
+Type "help" for help.
+
+AisneDBv1=# CREATE EXTENSION postgis;
+CREATE EXTENSION
+AisneDBv1=# SELECT PostGIS_Version();
+            postgis_version            
+---------------------------------------
+ 3.5 USE_GEOS=1 USE_PROJ=1 USE_STATS=1
+(1 row))"
+
+
+              mtn l'étape c'est l'inmport des données, je dl depuis le bash " brew install gdal" pour se faire ,
+              choix entre le format GEOjson ou shapefile , le 2eme me semble mieux , 
+je cherche le chemin dans le dossier zip des donnée que j'ai dl et je cherche le fichiers parcelle.shp
+
+
+  en bash avec cette commande j'ai import le dossier sur la base , 
+  ogr2ogr \
+  -f "PostgreSQL" \
+  PG:"dbname=AisneDBv1 user=vincentreyss" \
+  ~/Downloads/PARCELLAIRE-EXPRESS_1-1__SHP_LAMB93_D002_2025-04-01/PARCELLAIRE-EXPRESS/1_DONNEES_LIVRAISON_2025-05-00111/PEPCI_1-1_SHP_LAMB93_D002/PARCELLE.SHP \ 
+  -nln parcelles \
+  -nlt MULTIPOLYGON \
+  -lco GEOMETRY_NAME=geom \
+  -lco FID=gid \
+  -overwrite
+
+    puis sur la base pour verif , 2/3 requetes type histoire de : 
+AisneDBv1=# \dt
+                List of relations
+ Schema |      Name       | Type  |    Owner     
+--------+-----------------+-------+--------------
+ public | parcelles       | table | vincentreyss
+ public | spatial_ref_sys | table | vincentreyss
+(2 rows)
+
+AisneDBv1=# SELECT COUNT(*) FROM parcelles;
+ count  
+--------
+ 997740
+(1 row)
+
+AisneDBv1=# SELECT ST_Extent(geom) FROM parcelles;
+                  st_extent                  
+---------------------------------------------
+ BOX(696937.21 6859783.86,790285 6997014.26)
+(1 row)
+
+l'import est ok , 
+
+ETAPE 3 API 
+
+                    petite recherche google si une api propose pas deja ca ,  chagpt me conseille "fast APi" jsp pas trop ce que ca vaut et les impact derriere
+                      je vais partir dessus sans trop de réel coherence sur les rest api que j'ai vus sur google 
+
+  okey ,depuis le repertoire d'exo j'ai creer un fichier "main.py" et jai copier ce code : 
+from fastapi import FastAPI
+import psycopg2
+import geojson
+from fastapi.responses import JSONResponse
+
+app = FastAPI()
+
+# Connexion à ta base Postgres
+conn = psycopg2.connect(
+    dbname="AisneDBv1",
+    user="vincentreyss",
+    host="localhost",
+    port="5432"
+)
+
+@app.get("/")
+def root():
+    return {"message": "API Parcelles AisneDBv1 active"}
+
+@app.get("/parcelles")
+def get_parcelles():
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT ST_AsGeoJSON(geom), gid FROM parcelles LIMIT 100
+    """)
+    rows = cur.fetchall()
+
+    features = []
+    for geom_json, gid in rows:
+        geom = geojson.loads(geom_json)
+        features.append(geojson.Feature(geometry=geom, properties={"id": gid}))
+
+    feature_collection = geojson.FeatureCollection(features)
+    return JSONResponse(content=feature_collection)
+
+
+
+  sur les liens local host j'obtiens bien les données mtn a les afficher sur une map 
+
+   Créer une page HTML 
+	  utilise OpenStreetMap comme fond de carte
+		récupère les données depuis l'API 
+		affiche les géométries des parcelles sur la carte
+
+                chapgt conseille leafjet.js , sur ces choix je reste un peu dans le flou ,
+                j'avance bien donc je continue mais j'irais faire de la doc pour mieux comprendre tout ca et les impact de ces choix 
+  vendredi ( 16h19) petite pause et je commit deja ce fichier 
+
